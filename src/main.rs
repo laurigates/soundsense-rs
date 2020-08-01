@@ -259,7 +259,7 @@ impl App {
 
             let items = self.items.iter().map(|i| Text::raw(i));
             let items = List::new(items)
-                .block(Block::default().borders(Borders::ALL).title("List"))
+                .block(Block::default().borders(Borders::ALL).title("Log"))
                 .style(Style::default().fg(Color::Green))
                 .highlight_style(
                     Style::default()
