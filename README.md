@@ -24,6 +24,14 @@ a sound-engine utility for [Dwarf Fortress], using Rust.
    * Ultimately, you should only need one executable, the soundpack folder, and DF.
    * Recommended soundpack fork: https://github.com/jecowa/soundsensepack
 
+## Keys
+
+* Up/Down arrows to change selected channel
+* Left/Right arrows to change volume of selected channel
+* Space to pause selected channel
+* s to skip on selected channel
+* q to exit
+
 ## Current Features
 
 * Plays sounds reactive to what happens in DF.

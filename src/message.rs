@@ -35,6 +35,8 @@ pub enum UIMessage {
     LoadedVolumeSettings(Vec<(Box<str>, f32)>),
     /// The Channel IsPause had been set.
     ChannelWasPlayPaused(Box<str>, bool),
+    /// Sound was skipped on channel
+    ChannelSoundWasSkipped(Box<str>),
     /// There was an error in the Sound thread.
     SoundThreadPanicked(String, String),
 }

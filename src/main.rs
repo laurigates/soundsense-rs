@@ -136,6 +136,19 @@ impl App {
             'q' => {
                 self.should_quit = true;
             }
+            's' => {
+                // Skip on selected channel
+                match self.channels.state.selected() {
+                    Some(i) => {
+                        let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+                        self.sound_tx.send(
+                            SoundMessage::SkipCurrentSound(channel_name)
+                            ).unwrap();
+                    }
+                    None => (),
+                }
+
+            }
             ' ' => {
                 // Pause selected channel
                 match self.channels.state.selected() {
@@ -186,6 +199,17 @@ impl App {
                 UIMessage::LoadedIgnoreList => {
                     let value = format!("Ignore list loaded!");
                     self.items.push(value)
+                }
+                UIMessage::ChannelSoundWasSkipped(name) => {
+                    let log_message = match self.channels.items.iter().find(|&x| x.name == name.to_string()) {
+                        Some(channel) => {
+                            format!("Channel {} sound skipped.", channel.name)
+                        }
+                        None => {
+                            format!("Channel could not be found when trying to skip sound.")
+                        }
+                    };
+                    self.items.push(log_message)
                 }
                 UIMessage::ChannelWasPlayPaused(name, is_paused) => {
                     let value = format!("Channel {} is_paused: {}.", &name, is_paused);
