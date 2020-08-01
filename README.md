@@ -1,11 +1,8 @@
 # SOUNDSENSE-RS</br><img src="./icons/icon.ico" width="128px" height="128px"></img></br>Soundsense, written in Rust.</br>![Build](https://github.com/prixt/soundsense-rs/workflows/Build/badge.svg)
 My attempt at recreating [SoundSense](http://df.zweistein.cz/soundsense/), a sound-engine utility for [Dwarf Fortress](http://www.bay12games.com/dwarves/), using Rust.
 
-<p align='center'>
-    <img src="./screenshots/windows-screenshot.png" title='Windows screenshot' width='33%' style="float:left;">
-    <img src="./screenshots/macos-screenshot.png" title='MacOs screenshot by jecowa' width='33%'>
-    <img src="./screenshots/linux-screenshot.png" title='Ubuntu screenshot' width='32%' style="float:right;">
-</p>
+![Linux TUI screenshot](/screenshots/linux-tui-screenshot.png?raw=true "Linux
+TUI screenshot")
 
 ## Why?
 1. To see if I could do it.
