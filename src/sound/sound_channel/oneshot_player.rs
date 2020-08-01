@@ -4,7 +4,7 @@ use super::*;
 
 /// Struct responsible for one playing oneshot source.
 struct Control {
-    /// This volume is independent from Channel's local_volume and SoundManager's total_volume. 
+    /// This volume is independent from Channel's local_volume and SoundManager's total_volume.
     volume: VolumeLock,
     /// Whether the source is stopped.
     stopped: AtomicBool,
@@ -61,7 +61,7 @@ impl OneshotPlayer {
         self.paused.load(Ordering::Relaxed)
     }
 
-    /// Make all playing sources stop. 
+    /// Make all playing sources stop.
     #[inline]
     pub fn stop(&self) {
         for control in self.controls.iter() {
@@ -92,25 +92,17 @@ impl OneshotPlayer {
     /// Add a oneshot source.
     /// Generate a control for the source.
     /// Wraps the source in appropriate control wraps plays it.
-    pub fn add_source<S>(
-        &mut self,
-        device: &Device,
-        source: S,
-        source_volume: f32,
-        balance: f32
-    )
+    pub fn add_source<S>(&mut self, device: &Device, source: S, source_volume: f32, balance: f32)
     where
         S: Source + Send + 'static,
-        S::Item: Sample + Send
+        S::Item: Sample + Send,
     {
         let count = Arc::new(AtomicUsize::new(1));
-        let control = Arc::new(
-            Control {
-                volume: VolumeLock::new(),
-                stopped: AtomicBool::new(false),
-                count,
-            }
-        );
+        let control = Arc::new(Control {
+            volume: VolumeLock::new(),
+            stopped: AtomicBool::new(false),
+            count,
+        });
         let paused = self.paused.clone();
         let local_volume = self.local_volume.clone();
         let total_volume = self.total_volume.clone();
@@ -122,34 +114,28 @@ impl OneshotPlayer {
             .pausable(false)
             .amplify(1.0)
             .stoppable()
-            .periodic_access(Duration::from_millis(5),
-                move |src| {
-                    if control_a.stopped.load(Ordering::Relaxed) {
-                        src.stop();
-                    }
-                    else {
-                        src.inner_mut()
-                            .set_factor(
-                                source_volume
-                                * control_a.volume.get()
-                                * local_volume.get()
-                                * total_volume.get()
-                                * if local_is_paused.get() {0.0} else {1.0}
-                                * if total_is_paused.get() {0.0} else {1.0}
-                            );
-                        src.inner_mut()
-                            .inner_mut()
-                            .set_paused(
-                                paused.load(Ordering::Relaxed)
-                            );
-                    }
+            .periodic_access(Duration::from_millis(5), move |src| {
+                if control_a.stopped.load(Ordering::Relaxed) {
+                    src.stop();
+                } else {
+                    src.inner_mut().set_factor(
+                        source_volume
+                            * control_a.volume.get()
+                            * local_volume.get()
+                            * total_volume.get()
+                            * if local_is_paused.get() { 0.0 } else { 1.0 }
+                            * if total_is_paused.get() { 0.0 } else { 1.0 },
+                    );
+                    src.inner_mut()
+                        .inner_mut()
+                        .set_paused(paused.load(Ordering::Relaxed));
                 }
-            ).convert_samples::<f32>();
+            })
+            .convert_samples::<f32>();
         let source = source::Done::new(source, control_b.count.clone());
         if balance == 0.0 {
             play_raw(device, source);
-        }
-        else {
+        } else {
             let source = source.buffered();
             let source = Spatial::new(
                 source,
@@ -164,9 +150,7 @@ impl OneshotPlayer {
 
     /// Remove all controls if stopped, or if the source has finished playing.
     pub fn maintain(&mut self) {
-        self.controls.retain(|c| 
-            !c.stopped.load(Ordering::Relaxed)
-            && c.count.load(Ordering::Relaxed) == 1
-        );
+        self.controls
+            .retain(|c| !c.stopped.load(Ordering::Relaxed) && c.count.load(Ordering::Relaxed) == 1);
     }
 }

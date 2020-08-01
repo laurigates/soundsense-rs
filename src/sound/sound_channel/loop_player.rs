@@ -1,6 +1,6 @@
 use super::*;
-use std::sync::mpsc::Receiver;
 use std::collections::VecDeque;
+use std::sync::mpsc::Receiver;
 
 /// Struct responsible of playing looping sounds.
 pub struct LoopPlayer {
@@ -108,16 +108,12 @@ impl LoopPlayer {
 
     /// Change the loop.
     /// Replaces the current set of files with another one.
-    pub fn change_loop(
-        &mut self,
-        device: &Device,
-        files: &[SoundFile],
-        rng: &mut ThreadRng
-    ) {
+    pub fn change_loop(&mut self, device: &Device, files: &[SoundFile], rng: &mut ThreadRng) {
         self.stop();
         self.files = files.iter().cloned().collect();
         let (front, back) = self.files.as_mut_slices();
-        front.shuffle(rng); back.shuffle(rng);
+        front.shuffle(rng);
+        back.shuffle(rng);
         let (queue_tx, queue_rx) = queue::queue(true);
         play_raw(device, queue_rx);
         let volume = self.volume.get();
@@ -148,12 +144,12 @@ impl LoopPlayer {
                 Err(e) => {
                     warn!("Failed to open file {}: {}", path.display(), e);
                     warn!("Will ignore this file.");
-                    continue
+                    continue;
                 }
             };
             match Decoder::new(f) {
                 Ok(source) => {
-                    let balance = balance.unwrap_or_else(||rng.gen_range(-1.0, 1.0));
+                    let balance = balance.unwrap_or_else(|| rng.gen_range(-1.0, 1.0));
                     self.append_source(source, volume, balance)
                 }
                 Err(e) => {
@@ -168,7 +164,7 @@ impl LoopPlayer {
     fn append_source<S>(&mut self, source: S, source_volume: f32, balance: f32)
     where
         S: Source + Send + 'static,
-        S::Item: Sample + Send
+        S::Item: Sample + Send,
     {
         let stopped = self.stopped.clone();
         let paused = self.paused.clone();
@@ -182,30 +178,21 @@ impl LoopPlayer {
             .pausable(false)
             .amplify(1.0)
             .stoppable()
-            .periodic_access(Duration::from_millis(5),
-                move |src| {
-                    if stopped.load(Ordering::Relaxed)
-                    || skipped.swap(false, Ordering::Relaxed) {
-                        src.stop();
-                    }
-                    else {
-                        src.inner_mut()
-                            .set_factor(
-                                source_volume
-                                * volume.get()
-                                * local_volume.get()
-                                * total_volume.get()
-                            );
-                        src.inner_mut()
-                            .inner_mut()
-                            .set_paused(
-                                paused.load(Ordering::Relaxed)
-                                || local_is_paused.get()
-                                || total_is_paused.get()
-                            );
-                    }
+            .periodic_access(Duration::from_millis(5), move |src| {
+                if stopped.load(Ordering::Relaxed) || skipped.swap(false, Ordering::Relaxed) {
+                    src.stop();
+                } else {
+                    src.inner_mut().set_factor(
+                        source_volume * volume.get() * local_volume.get() * total_volume.get(),
+                    );
+                    src.inner_mut().inner_mut().set_paused(
+                        paused.load(Ordering::Relaxed)
+                            || local_is_paused.get()
+                            || total_is_paused.get(),
+                    );
                 }
-            ).convert_samples::<f32>();
+            })
+            .convert_samples::<f32>();
         // If balance is equal, just append it to queue.
         if balance == 0.0 {
             self.sleep_until_end = Some(self.queue_tx.append_with_signal(source));
@@ -226,13 +213,16 @@ impl LoopPlayer {
     /// Maintain the loop.
     pub fn maintain(&mut self, rng: &mut ThreadRng) {
         use std::sync::mpsc::TryRecvError;
-        if self.stopped.load(Ordering::Relaxed) {return}
+        if self.stopped.load(Ordering::Relaxed) {
+            return;
+        }
         if let Some(song_end_receiver) = &mut self.sleep_until_end {
             match song_end_receiver.try_recv() {
                 Ok(_) => self.on_source_end(rng),
                 Err(TryRecvError::Empty) => (),
-                Err(TryRecvError::Disconnected) =>
-                    panic!("TryRecvError::Disconnected on LoopPlayer maintain!"),
+                Err(TryRecvError::Disconnected) => {
+                    panic!("TryRecvError::Disconnected on LoopPlayer maintain!")
+                }
             }
         }
     }
@@ -241,8 +231,7 @@ impl LoopPlayer {
     /// If there are no more sources in queue, rotated the files deque, and appends the first file.
     fn on_source_end(&mut self, rng: &mut ThreadRng) {
         trace!("Song finished.");
-        if !self.files.is_empty() && !self.stopped.load(Ordering::Relaxed)
-        {
+        if !self.files.is_empty() && !self.stopped.load(Ordering::Relaxed) {
             trace!("  Playing next song.");
             self.files.rotate_left(1);
             self.append_file(rng);

@@ -1,38 +1,35 @@
-use std::time::{Instant, Duration};
-use std::fs::{self, File};
-use std::io::{Read, Seek, SeekFrom, BufReader, BufRead};
-use std::path::{Path, PathBuf};
 use std::collections::{BTreeMap, HashSet};
-use std::sync::{
-    Arc,
-    atomic::{AtomicBool, AtomicUsize, Ordering}
-};
 use std::error::Error;
+use std::fs::{self, File};
+use std::io::{BufRead, BufReader, Read, Seek, SeekFrom};
+use std::path::{Path, PathBuf};
+use std::sync::{
+    atomic::{AtomicBool, AtomicUsize, Ordering},
+    Arc,
+};
+use std::time::{Duration, Instant};
 
 use crate::message::*;
 use crossbeam::{
+    channel::{Receiver, Sender},
     sync::ShardedLock,
-    channel::{Sender, Receiver}
 };
-use rodio::*;
-use rand::prelude::*;
-use rand::distributions::weighted::WeightedIndex;
 use lazy_static::lazy_static;
+use rand::distributions::weighted::WeightedIndex;
+use rand::prelude::*;
 use regex::Regex;
+use rodio::*;
 
-mod sound_manager; use sound_manager::SoundManager;
-mod sound_channel; use sound_channel::SoundChannel;
+mod sound_manager;
+use sound_manager::SoundManager;
+mod sound_channel;
+use sound_channel::SoundChannel;
 
 pub type Result<T> = std::result::Result<T, Box<dyn Error>>;
 
 lazy_static! {
-    static ref FAULTY_ESCAPE: Regex = Regex::new(
-        r"\\([^\.\+\*\?\(\)\|\[\]\{\}\^\$])"
-    ).unwrap();
-
-    static ref EMPTY_EXPR: Regex = Regex::new(
-        r"(\|\(\)\))"
-    ).unwrap();
+    static ref FAULTY_ESCAPE: Regex = Regex::new(r"\\([^\.\+\*\?\(\)\|\[\]\{\}\^\$])").unwrap();
+    static ref EMPTY_EXPR: Regex = Regex::new(r"(\|\(\)\))").unwrap();
 }
 
 /// Show if the SoundFile is a single sound, or a playlist of multiple sounds.
@@ -41,7 +38,7 @@ pub enum SoundFileType {
     /// Contains a single file path.
     IsPath(PathBuf),
     /// Contains multiple file paths.
-    IsPlaylist(Vec<PathBuf>)
+    IsPlaylist(Vec<PathBuf>),
 }
 
 /// A struct containing all the information about a SoundFile.
@@ -152,9 +149,9 @@ pub fn run(sound_rx: Receiver<SoundMessage>, ui_tx: Sender<UIMessage>) {
     loop {
         info!("(Re)Starting sound thread.");
         // SoundManager
-        let mut manager : Option<SoundManager> = None;
+        let mut manager: Option<SoundManager> = None;
         // BufReader for the gamelog.
-        let mut buf_reader : Option<BufReader<File>> = None;
+        let mut buf_reader: Option<BufReader<File>> = None;
         // Current time for delta time calculation.
         let mut prev = Instant::now();
 
@@ -177,49 +174,58 @@ pub fn run(sound_rx: Receiver<SoundMessage>, ui_tx: Sender<UIMessage>) {
                             if let Some(prev_manager) = manager.take() {
                                 prev_manager.finish();
                             }
-                            manager.replace(
-                                SoundManager::new(&path, ui_tx.clone())?
-                            );
+                            manager.replace(SoundManager::new(&path, ui_tx.clone())?);
                         }
 
                         // These types of messages require a manager.
-                        message => if let Some(manager) = manager.as_mut() {
-                            match message {
-                                ChangeIgnoreList(path) => {
-                                    let file = &mut File::open(&path)?;
-                                    let buf = &mut Vec::new();
-                                    file.read_to_end(buf)?;
-                                    let list: Vec<Regex> = String::from_utf8_lossy(&buf).lines().filter_map(|expr| {
-                                        let processed = FAULTY_ESCAPE.replace_all(expr, "$1");
-                                        let processed = EMPTY_EXPR.replace_all(&processed, ")?");
-                                        Regex::new(&processed).ok()
-                                    }).collect();
-                                    manager.set_ignore_list(list)?;
-                                }
+                        message => {
+                            if let Some(manager) = manager.as_mut() {
+                                match message {
+                                    ChangeIgnoreList(path) => {
+                                        let file = &mut File::open(&path)?;
+                                        let buf = &mut Vec::new();
+                                        file.read_to_end(buf)?;
+                                        let list: Vec<Regex> = String::from_utf8_lossy(&buf)
+                                            .lines()
+                                            .filter_map(|expr| {
+                                                let processed =
+                                                    FAULTY_ESCAPE.replace_all(expr, "$1");
+                                                let processed =
+                                                    EMPTY_EXPR.replace_all(&processed, ")?");
+                                                Regex::new(&processed).ok()
+                                            })
+                                            .collect();
+                                        manager.set_ignore_list(list)?;
+                                    }
 
-                                VolumeChange(channel,volume) => {
-                                    manager.set_volume(&channel, volume * 0.01)?;
-                                }
+                                    VolumeChange(channel, volume) => {
+                                        manager.set_volume(&channel, volume * 0.01)?;
+                                    }
 
-                                ThresholdChange(channel,threshold) => {
-                                    trace!("Set channel {} threshold to {}", channel, threshold);
-                                    manager.set_threshold(&channel, threshold)?;
-                                }
+                                    ThresholdChange(channel, threshold) => {
+                                        trace!(
+                                            "Set channel {} threshold to {}",
+                                            channel,
+                                            threshold
+                                        );
+                                        manager.set_threshold(&channel, threshold)?;
+                                    }
 
-                                SkipCurrentSound(channel) => {
-                                    trace!("Skip Current Sound in {}", channel);
-                                    manager.skip(&channel)?;
-                                }
+                                    SkipCurrentSound(channel) => {
+                                        trace!("Skip Current Sound in {}", channel);
+                                        manager.skip(&channel)?;
+                                    }
 
-                                PlayPause(channel) => {
-                                    trace!("Play/Pause {}", channel);
-                                    manager.play_pause(&channel)?;
-                                }
+                                    PlayPause(channel) => {
+                                        trace!("Play/Pause {}", channel);
+                                        manager.play_pause(&channel)?;
+                                    }
 
-                                SetCurrentVolumesAsDefault(file) => {
-                                    manager.set_current_volumes_as_default(file)?;
+                                    SetCurrentVolumesAsDefault(file) => {
+                                        manager.set_current_volumes_as_default(file)?;
+                                    }
+                                    _ => (),
                                 }
-                                _ => (),
                             }
                         }
                     }
@@ -228,10 +234,7 @@ pub fn run(sound_rx: Receiver<SoundMessage>, ui_tx: Sender<UIMessage>) {
                 if let Some(manager) = &mut manager {
                     if let Some(buf_reader) = &mut buf_reader {
                         let dt = current.duration_since(prev).as_millis() as usize;
-                        for log in buf_reader
-                            .lines()
-                            .filter_map(|l| l.ok())
-                        {
+                        for log in buf_reader.lines().filter_map(|l| l.ok()) {
                             manager.process_log(&log)?;
                         }
                         manager.maintain(dt)?;
@@ -240,17 +243,18 @@ pub fn run(sound_rx: Receiver<SoundMessage>, ui_tx: Sender<UIMessage>) {
                 prev = current;
                 std::thread::sleep(std::time::Duration::from_millis(10));
             }
-        }(){// LOOK, A BUTTERFLY!
+        }() {
+            // LOOK, A BUTTERFLY!
             // If an error occurred and was caught, send the error message to the UI.
             // Return to the outer loop, which will then restart the inner loop.
             let mut error_message = "The soundthread restarted due to this error:\n".to_string();
             error_message.push_str(&error.to_string());
-            ui_tx.send(
-                UIMessage::SoundThreadPanicked(
+            ui_tx
+                .send(UIMessage::SoundThreadPanicked(
                     "SoundThread Error".to_string(),
                     error_message,
-                )
-            ).unwrap();
+                ))
+                .unwrap();
             error!("SoundThreadError:\n{:?}", error);
         }
     }
