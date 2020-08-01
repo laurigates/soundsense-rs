@@ -26,11 +26,11 @@ a sound-engine utility for [Dwarf Fortress], using Rust.
 
 ## Keys
 
-* Up/Down arrows to change selected channel
-* Left/Right arrows to change volume of selected channel
-* Space to pause selected channel
-* s to skip on selected channel
-* q to exit
+* <kbd>↑</kbd>/<kbd>↓</kbd> arrows to change selected channel
+* <kbd>←</kbd>/<kbd>→</kbd> arrows to change volume of selected channel
+* <kbd>Space</kbd> to pause selected channel
+* <kbd>s</kbd> to skip on selected channel
+* <kbd>q</kbd> to exit
 
 ## Current Features
 
