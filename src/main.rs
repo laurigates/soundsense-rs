@@ -185,10 +185,12 @@ impl App {
                 UIMessage::LoadedVolumeSettings(entries) => {
                     for (name, volume) in &entries {
                         self.items.push(format!("{}: {}", name, volume));
-                        for channel in &mut self.channels.items {
-                            if channel.name == name.to_string() {
+
+                        match self.channels.items.iter_mut().find(|x| x.name == name.to_string()) {
+                            Some(channel) => {
                                 channel.volume = *volume as f64;
                             }
+                            None => ()
                         }
                     }
                 }
@@ -212,13 +214,16 @@ impl App {
                     self.items.push(log_message)
                 }
                 UIMessage::ChannelWasPlayPaused(name, is_paused) => {
-                    let value = format!("Channel {} is_paused: {}.", &name, is_paused);
-                    for channel in &mut self.channels.items {
-                        if channel.name == name.to_string() {
+                    let log_message = match self.channels.items.iter_mut().find(|x| x.name == name.to_string()) {
+                        Some(channel) => {
                             channel.paused = !channel.paused;
+                            format!("Channel {} is paused: {}.", channel.name, is_paused)
                         }
-                    }
-                    self.items.push(value)
+                        None => {
+                            format!("Channel could not be found when trying to pause channel.")
+                        }
+                    };
+                    self.items.push(log_message)
                 }
                 UIMessage::SoundThreadPanicked(name, text) => {
                     let value = format!("Error: {} {}", &name, &text);
