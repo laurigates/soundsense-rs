@@ -13,24 +13,24 @@ jobs:
     steps:
       - name: Checkout code
         uses: actions/checkout@master
-      
+
       - name: Install dependencies (Linux)
         if: runner.os == 'Linux'
         run: |
           sudo apt update
-          sudo apt install -y libasound2-dev libgtk-3-dev libwebkit2gtk-4.0-dev
-      
+          sudo apt install -y libasound2-dev
+
       - name: Cargo Update
         uses: actions-rs/cargo@v1
         with:
           command: update
-      
+
       - name: Cargo Build
         uses: actions-rs/cargo@v1
         with:
           command: build
           args: --release --verbose
-      
+
       - name: Upload Built Binary
         if: runner.os != 'Windows'
         uses: actions/upload-artifact@v1
