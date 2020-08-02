@@ -2,7 +2,8 @@
 
 ![SoundSense, written in Rust.](/icons/icon.png?raw=true)
 
-![Build](https://github.com/prixt/soundsense-rs/workflows/Build/badge.svg)
+![Tests](https://github.com/laurigates/soundsense-rs/workflows/Tests/badge.svg)
+![Build](https://github.com/laurigates/soundsense-rs/workflows/Build/badge.svg)
 
 My attempt at improving [SoundSense-RS] by making it even leaner by replacing
 the webkit based UI with a terminal based interface, [TUI].
