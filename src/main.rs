@@ -1,14 +1,15 @@
 #![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
 #![cfg_attr(debug_assertions, windows_subsystem = "console")]
 
+mod app;
 mod message;
 mod sound;
+mod ui;
 mod util;
 
-use crate::util::{
-    event::{Event, Events},
-    StatefulList,
-};
+use app::App;
+
+use crate::util::event::{Event, Events};
 
 #[macro_use]
 extern crate num_derive;
@@ -16,21 +17,14 @@ extern crate num_traits;
 
 #[macro_use]
 extern crate log;
-use crate::message::{SoundMessage, Threshold, UIMessage};
+use crate::message::SoundMessage;
 use crossbeam::channel::unbounded as channel;
-use crossbeam::channel::{Receiver, Sender};
+
+use tui::{backend::TermionBackend, Terminal};
 
 use regex::Regex;
-use std::{env, error::Error, fs, io, path::PathBuf, sync::Mutex};
+use std::{env, error::Error, io, path::PathBuf, sync::Mutex};
 use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
-use tui::{
-    backend::Backend,
-    backend::TermionBackend,
-    layout::{Constraint, Direction, Layout},
-    style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Gauge, List, Text},
-    Frame, Terminal,
-};
 
 /// How SoundSense-RS works:
 /// 1. Dwarf Fortress(&DFHack) writes into gamelog.txt
@@ -41,304 +35,6 @@ use tui::{
 /// All the while the UI thread handles user input and sends SoundMessage to the SoundThread
 /// through a Sender<SoundMessage>, while the Sound thread sends UIMessages to the UI through
 /// a Sender<UIMessage>.
-
-struct Channel {
-    name: String,
-    volume: f64,
-    paused: bool,
-    threshold: Threshold,
-}
-
-impl Channel {
-    fn new(name: String, volume: f64) -> Channel {
-        Channel {
-            name,
-            volume,
-            paused: false,
-            threshold: Threshold::Everything,
-        }
-    }
-}
-
-struct App {
-    pub should_quit: bool,
-    sound_tx: Sender<SoundMessage>,
-    ui_rx: Receiver<UIMessage>,
-    channels: StatefulList<Channel>,
-    items: Vec<String>,
-}
-
-impl App {
-    fn new(sound_tx: Sender<SoundMessage>, ui_rx: Receiver<UIMessage>) -> App {
-        App {
-            should_quit: false,
-            sound_tx,
-            ui_rx,
-            channels: StatefulList::new(),
-            items: Vec::new(),
-        }
-    }
-
-    pub fn on_up(&mut self) {
-        self.channels.previous()
-    }
-
-    pub fn on_down(&mut self) {
-        self.channels.next()
-    }
-
-    pub fn on_right(&mut self) {
-        if let Some(i) = self.channels.state.selected() {
-            if self.channels.items[i].volume < 100.0 {
-                self.channels.items[i].volume += 1.0;
-            }
-            let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-            let channel_volume: f32 = self.channels.items[i].volume as f32;
-            self.sound_tx
-                .send(SoundMessage::VolumeChange(channel_name, channel_volume))
-                .unwrap();
-        }
-        self.save_config()
-    }
-
-    pub fn on_left(&mut self) {
-        if let Some(i) = self.channels.state.selected() {
-            if self.channels.items[i].volume >= 1.0 {
-                self.channels.items[i].volume += -1.0;
-            }
-            let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-            let channel_volume: f32 = self.channels.items[i].volume as f32;
-            self.sound_tx
-                .send(SoundMessage::VolumeChange(channel_name, channel_volume))
-                .unwrap();
-        }
-        self.save_config()
-    }
-
-    fn save_config(&mut self) {
-        // Save volumes to config file before quitting
-        let mut conf_path = dirs::config_dir().expect("Failed to get configuration directory.");
-        conf_path.push("soundsense-rs");
-        if !conf_path.is_dir() {
-            fs::create_dir(&conf_path).expect("Failed to create soundsense-rs config directory.");
-        }
-        conf_path.push("default-volumes.ini");
-        let conf_file =
-            fs::File::create(conf_path).expect("Failed to create default-volumes.ini file.");
-
-        self.sound_tx
-            .send(SoundMessage::SetCurrentVolumesAsDefault(conf_file))
-            .unwrap();
-    }
-
-    pub fn on_key(&mut self, c: char) {
-        match c {
-            'q' => {
-                self.should_quit = true;
-            }
-            's' => {
-                // Skip on selected channel
-                if let Some(i) = self.channels.state.selected() {
-                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                    self.sound_tx
-                        .send(SoundMessage::SkipCurrentSound(channel_name))
-                        .unwrap();
-                }
-            }
-            't' => {
-                // Cycle selected channel threshold
-                if let Some(i) = self.channels.state.selected() {
-                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                    self.channels.items[i].threshold =
-                        Threshold::next_threshold(self.channels.items[i].threshold);
-                    self.sound_tx
-                        .send(SoundMessage::ThresholdChange(
-                            channel_name,
-                            self.channels.items[i].threshold,
-                        ))
-                        .unwrap();
-                }
-            }
-            ' ' => {
-                // Pause selected channel
-                if let Some(i) = self.channels.state.selected() {
-                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                    self.sound_tx
-                        .send(SoundMessage::PlayPause(channel_name))
-                        .unwrap();
-                }
-            }
-            _ => (),
-        }
-    }
-
-    fn update(&mut self) {
-        for ui_message in self.ui_rx.try_iter() {
-            match ui_message {
-                UIMessage::LoadedSoundpack(channel_names) => {
-                    for channel in &channel_names {
-                        let new_channel = Channel::new(channel.to_string(), 0.0);
-                        self.channels.items.push(new_channel);
-                    }
-
-                    // Select the first channel by default
-                    self.channels.state.select(Some(0));
-
-                    let value = format!(
-                        "Soundpack loaded! Loaded channels: {}.",
-                        &channel_names.join(", ")
-                    );
-                    self.items.push(value)
-                }
-                UIMessage::LoadedVolumeSettings(entries) => {
-                    for (name, volume) in &entries {
-                        self.items.push(format!("{}: {}", name, volume));
-
-                        if let Some(channel) = self
-                            .channels
-                            .items
-                            .iter_mut()
-                            .find(|x| x.name == name.to_string())
-                        {
-                            channel.volume = *volume as f64;
-                        }
-                    }
-                }
-                UIMessage::LoadedGamelog => {
-                    let value = "Gamelog loaded!".to_string();
-                    self.items.push(value)
-                }
-                UIMessage::LoadedIgnoreList => {
-                    let value = "Ignore list loaded!".to_string();
-                    self.items.push(value)
-                }
-                UIMessage::ChannelSoundWasSkipped(name) => {
-                    let log_message = match self
-                        .channels
-                        .items
-                        .iter()
-                        .find(|&x| x.name == name.to_string())
-                    {
-                        Some(channel) => format!("Channel {} sound skipped.", channel.name),
-                        None => "Channel could not be found when trying to skip sound.".to_string(),
-                    };
-                    self.items.push(log_message)
-                }
-                UIMessage::ChannelWasPlayPaused(name, is_paused) => {
-                    let log_message = match self
-                        .channels
-                        .items
-                        .iter_mut()
-                        .find(|x| x.name == name.to_string())
-                    {
-                        Some(channel) => {
-                            channel.paused = !channel.paused;
-                            format!("Channel {} is paused: {}.", channel.name, is_paused)
-                        }
-                        None => {
-                            "Channel could not be found when trying to pause channel.".to_string()
-                        }
-                    };
-                    self.items.push(log_message)
-                }
-                UIMessage::ChannelThresholdWasChanged(name, threshold) => {
-                    let log_message = match self
-                        .channels
-                        .items
-                        .iter_mut()
-                        .find(|x| x.name == name.to_string())
-                    {
-                        Some(channel) => format!(
-                            "Channel {} threshold was changed to {}.",
-                            channel.name, threshold
-                        ),
-                        None => "Channel could not be found when trying to change threshold."
-                            .to_string(),
-                    };
-                    self.items.push(log_message)
-                }
-                UIMessage::SoundThreadPanicked(name, text) => {
-                    let value = format!("Error: {} {}", &name, &text);
-                    self.items.push(value)
-                }
-            }
-        }
-    }
-
-    fn draw<B: Backend>(&mut self, f: &mut Frame<B>) {
-        let block = Block::default()
-            .borders(Borders::ALL)
-            .title("soundsense-rs");
-        f.render_widget(block, f.size());
-
-        let chunks = Layout::default()
-            .direction(Direction::Vertical)
-            .margin(1)
-            .constraints([Constraint::Percentage(40), Constraint::Percentage(60)].as_ref())
-            .split(f.size());
-
-        {
-            let chunks = Layout::default()
-                .direction(Direction::Vertical)
-                .margin(1)
-                .constraints(
-                    [
-                        Constraint::Ratio(1, 6),
-                        Constraint::Ratio(1, 6),
-                        Constraint::Ratio(1, 6),
-                        Constraint::Ratio(1, 6),
-                        Constraint::Ratio(1, 6),
-                        Constraint::Ratio(1, 6),
-                    ]
-                    .as_ref(),
-                )
-                .split(chunks[0]);
-
-            for (i, channel) in self.channels.items.iter().enumerate() {
-                let mut color = Color::LightGreen;
-                // Hightlight selected item
-                if self.channels.state.selected() == Some(i) {
-                    color = Color::Red
-                }
-                let mut channel_label = channel.name.to_string();
-                if channel.paused {
-                    channel_label.push_str("(paused)")
-                }
-                let threshold_label = match channel.threshold {
-                    Threshold::Nothing => "(threshold: nothing)",
-                    Threshold::Critical => "(threshold: critical)",
-                    Threshold::Important => "(threshold: important)",
-                    Threshold::Fluff => "(threshold: fluff)",
-                    Threshold::Everything => "(threshold: everything)",
-                };
-                channel_label.push_str(threshold_label);
-                let gauge = Gauge::default()
-                    .style(Style::default().fg(color).bg(Color::Black))
-                    .label(&channel_label)
-                    .percent(channel.volume as u16);
-                f.render_widget(gauge, chunks[i]);
-            }
-        }
-        {
-            let chunks = Layout::default()
-                .direction(Direction::Horizontal)
-                .margin(0)
-                .constraints([Constraint::Percentage(100)].as_ref())
-                .split(chunks[1]);
-
-            let items = self.items.iter().map(Text::raw);
-            let items = List::new(items)
-                .block(Block::default().borders(Borders::ALL).title("Log"))
-                .style(Style::default().fg(Color::Green))
-                .highlight_style(
-                    Style::default()
-                        .fg(Color::LightGreen)
-                        .modifier(Modifier::BOLD),
-                );
-            f.render_widget(items, chunks[0])
-        }
-    }
-}
 
 fn main() -> Result<(), Box<dyn Error>> {
     // Setup and initialize the env_logger.
@@ -567,7 +263,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let events = Events::new();
 
     loop {
-        terminal.draw(|mut f| app.draw(&mut f))?;
+        terminal.draw(|mut f| ui::draw(&app, &mut f))?;
 
         match events.next()? {
             Event::Input(key) => match key {
