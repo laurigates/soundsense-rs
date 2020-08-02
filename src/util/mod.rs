@@ -1,3 +1,4 @@
+#![allow(dead_code)]
 // #[cfg(feature = "termion")]
 pub mod event;
 
