@@ -457,6 +457,10 @@ impl SoundManager {
         } else if let Some(channel) = self.channels.get_mut(channel_name) {
             channel.set_threshold(threshold);
         }
+        self.ui_sender.send(UIMessage::ChannelThresholdWasChanged(
+            Box::from(channel_name),
+            threshold,
+        ))?;
         Ok(())
     }
 

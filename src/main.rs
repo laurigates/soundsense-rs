@@ -11,8 +11,12 @@ use crate::util::{
 };
 
 #[macro_use]
+extern crate num_derive;
+extern crate num_traits;
+
+#[macro_use]
 extern crate log;
-use crate::message::{SoundMessage, UIMessage};
+use crate::message::{SoundMessage, Threshold, UIMessage};
 use crossbeam::channel::unbounded as channel;
 use crossbeam::channel::{Receiver, Sender};
 
@@ -42,6 +46,7 @@ struct Channel {
     name: String,
     volume: f64,
     paused: bool,
+    threshold: Threshold,
 }
 
 impl Channel {
@@ -50,6 +55,7 @@ impl Channel {
             name,
             volume,
             paused: false,
+            threshold: Threshold::Everything,
         }
     }
 }
@@ -139,6 +145,20 @@ impl App {
                         .unwrap();
                 }
             }
+            't' => {
+                // Cycle selected channel threshold
+                if let Some(i) = self.channels.state.selected() {
+                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+                    self.channels.items[i].threshold =
+                        Threshold::next_threshold(self.channels.items[i].threshold);
+                    self.sound_tx
+                        .send(SoundMessage::ThresholdChange(
+                            channel_name,
+                            self.channels.items[i].threshold,
+                        ))
+                        .unwrap();
+                }
+            }
             ' ' => {
                 // Pause selected channel
                 if let Some(i) = self.channels.state.selected() {
@@ -221,6 +241,22 @@ impl App {
                     };
                     self.items.push(log_message)
                 }
+                UIMessage::ChannelThresholdWasChanged(name, threshold) => {
+                    let log_message = match self
+                        .channels
+                        .items
+                        .iter_mut()
+                        .find(|x| x.name == name.to_string())
+                    {
+                        Some(channel) => format!(
+                            "Channel {} threshold was changed to {}.",
+                            channel.name, threshold
+                        ),
+                        None => "Channel could not be found when trying to change threshold."
+                            .to_string(),
+                    };
+                    self.items.push(log_message)
+                }
                 UIMessage::SoundThreadPanicked(name, text) => {
                     let value = format!("Error: {} {}", &name, &text);
                     self.items.push(value)
@@ -268,6 +304,14 @@ impl App {
                 if channel.paused {
                     channel_label.push_str("(paused)")
                 }
+                let threshold_label = match channel.threshold {
+                    Threshold::Nothing => "(threshold: nothing)",
+                    Threshold::Critical => "(threshold: critical)",
+                    Threshold::Important => "(threshold: important)",
+                    Threshold::Fluff => "(threshold: fluff)",
+                    Threshold::Everything => "(threshold: everything)",
+                };
+                channel_label.push_str(threshold_label);
                 let gauge = Gauge::default()
                     .style(Style::default().fg(color).bg(Color::Black))
                     .label(&channel_label)

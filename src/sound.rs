@@ -206,9 +206,9 @@ pub fn run(sound_rx: Receiver<SoundMessage>, ui_tx: Sender<UIMessage>) {
                                         trace!(
                                             "Set channel {} threshold to {}",
                                             channel,
-                                            threshold
+                                            threshold as u8
                                         );
-                                        manager.set_threshold(&channel, threshold)?;
+                                        manager.set_threshold(&channel, threshold as u8)?;
                                     }
 
                                     SkipCurrentSound(channel) => {

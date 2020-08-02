@@ -30,6 +30,7 @@ a sound-engine utility for [Dwarf Fortress], using Rust.
 * <kbd>←</kbd>/<kbd>→</kbd> arrows to change volume of selected channel
 * <kbd>Space</kbd> to pause selected channel
 * <kbd>s</kbd> to skip on selected channel
+* <kbd>t</kbd> to cycle threshold setting on selected channel
 * <kbd>q</kbd> to exit
 
 ## Current Features

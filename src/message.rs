@@ -1,3 +1,20 @@
+use num_traits::FromPrimitive;
+
+#[derive(Debug, Copy, Clone, FromPrimitive)]
+pub enum Threshold {
+    Nothing = 0,
+    Critical = 1,
+    Important = 2,
+    Fluff = 3,
+    Everything = 4,
+}
+
+impl Threshold {
+    pub fn next_threshold(t: Threshold) -> Threshold {
+        FromPrimitive::from_u8((t as u8 + 1) % 5).unwrap()
+    }
+}
+
 /// Messages sent from the UI thread to the Sound thread.
 #[non_exhaustive]
 pub enum SoundMessage {
@@ -12,7 +29,7 @@ pub enum SoundMessage {
     VolumeChange(Box<str>, f32),
     /// Change the threshold of a channel.
     /// "total" is total threshold, other values are specific channels.
-    ThresholdChange(Box<str>, u8),
+    ThresholdChange(Box<str>, Threshold),
     /// Skip sound currently played by loop_player
     SkipCurrentSound(Box<str>),
     /// Play/Pause channel
@@ -37,6 +54,8 @@ pub enum UIMessage {
     ChannelWasPlayPaused(Box<str>, bool),
     /// Sound was skipped on channel
     ChannelSoundWasSkipped(Box<str>),
+    /// Channel threshold was changed
+    ChannelThresholdWasChanged(Box<str>, u8),
     /// There was an error in the Sound thread.
     SoundThreadPanicked(String, String),
 }
