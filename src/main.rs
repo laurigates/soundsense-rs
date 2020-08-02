@@ -326,7 +326,7 @@ impl App {
                 .constraints([Constraint::Percentage(100)].as_ref())
                 .split(chunks[1]);
 
-            let items = self.items.iter().map(|i| Text::raw(i));
+            let items = self.items.iter().map(Text::raw);
             let items = List::new(items)
                 .block(Block::default().borders(Borders::ALL).title("Log"))
                 .style(Style::default().fg(Color::Green))
