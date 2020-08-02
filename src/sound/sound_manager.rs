@@ -467,9 +467,8 @@ impl SoundManager {
             }
         } else if let Some(channel) = self.channels.get_mut(channel_name) {
             channel.skip();
-            self.ui_sender.send(UIMessage::ChannelSoundWasSkipped(
-                Box::from(channel_name),
-            ))?;
+            self.ui_sender
+                .send(UIMessage::ChannelSoundWasSkipped(Box::from(channel_name)))?;
         }
         Ok(())
     }

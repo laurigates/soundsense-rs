@@ -82,35 +82,29 @@ impl App {
     }
 
     pub fn on_right(&mut self) {
-        match self.channels.state.selected() {
-            Some(i) => {
-                if self.channels.items[i].volume < 100.0 {
-                    self.channels.items[i].volume += 1.0;
-                }
-                let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                let channel_volume: f32 = self.channels.items[i].volume as f32;
-                self.sound_tx
-                    .send(SoundMessage::VolumeChange(channel_name, channel_volume))
-                    .unwrap();
+        if let Some(i) = self.channels.state.selected() {
+            if self.channels.items[i].volume < 100.0 {
+                self.channels.items[i].volume += 1.0;
             }
-            None => (),
+            let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+            let channel_volume: f32 = self.channels.items[i].volume as f32;
+            self.sound_tx
+                .send(SoundMessage::VolumeChange(channel_name, channel_volume))
+                .unwrap();
         }
         self.save_config()
     }
 
     pub fn on_left(&mut self) {
-        match self.channels.state.selected() {
-            Some(i) => {
-                if self.channels.items[i].volume >= 1.0 {
-                    self.channels.items[i].volume += -1.0;
-                }
-                let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                let channel_volume: f32 = self.channels.items[i].volume as f32;
-                self.sound_tx
-                    .send(SoundMessage::VolumeChange(channel_name, channel_volume))
-                    .unwrap();
+        if let Some(i) = self.channels.state.selected() {
+            if self.channels.items[i].volume >= 1.0 {
+                self.channels.items[i].volume += -1.0;
             }
-            None => (),
+            let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+            let channel_volume: f32 = self.channels.items[i].volume as f32;
+            self.sound_tx
+                .send(SoundMessage::VolumeChange(channel_name, channel_volume))
+                .unwrap();
         }
         self.save_config()
     }
@@ -138,32 +132,26 @@ impl App {
             }
             's' => {
                 // Skip on selected channel
-                match self.channels.state.selected() {
-                    Some(i) => {
-                        let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                        self.sound_tx.send(
-                            SoundMessage::SkipCurrentSound(channel_name)
-                            ).unwrap();
-                    }
-                    None => (),
+                if let Some(i) = self.channels.state.selected() {
+                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+                    self.sound_tx
+                        .send(SoundMessage::SkipCurrentSound(channel_name))
+                        .unwrap();
                 }
-
             }
             ' ' => {
                 // Pause selected channel
-                match self.channels.state.selected() {
-                    Some(i) => {
-                        let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
-                        self.sound_tx
-                            .send(SoundMessage::PlayPause(channel_name))
-                            .unwrap();
-                    }
-                    None => (),
+                if let Some(i) = self.channels.state.selected() {
+                    let channel_name: Box<str> = self.channels.items[i].name.to_string().into();
+                    self.sound_tx
+                        .send(SoundMessage::PlayPause(channel_name))
+                        .unwrap();
                 }
             }
-            _ => {}
+            _ => (),
         }
     }
+
     fn update(&mut self) {
         for ui_message in self.ui_rx.try_iter() {
             match ui_message {
@@ -186,41 +174,49 @@ impl App {
                     for (name, volume) in &entries {
                         self.items.push(format!("{}: {}", name, volume));
 
-                        match self.channels.items.iter_mut().find(|x| x.name == name.to_string()) {
-                            Some(channel) => {
-                                channel.volume = *volume as f64;
-                            }
-                            None => ()
+                        if let Some(channel) = self
+                            .channels
+                            .items
+                            .iter_mut()
+                            .find(|x| x.name == name.to_string())
+                        {
+                            channel.volume = *volume as f64;
                         }
                     }
                 }
                 UIMessage::LoadedGamelog => {
-                    let value = format!("Gamelog loaded!");
+                    let value = "Gamelog loaded!".to_string();
                     self.items.push(value)
                 }
                 UIMessage::LoadedIgnoreList => {
-                    let value = format!("Ignore list loaded!");
+                    let value = "Ignore list loaded!".to_string();
                     self.items.push(value)
                 }
                 UIMessage::ChannelSoundWasSkipped(name) => {
-                    let log_message = match self.channels.items.iter().find(|&x| x.name == name.to_string()) {
-                        Some(channel) => {
-                            format!("Channel {} sound skipped.", channel.name)
-                        }
-                        None => {
-                            format!("Channel could not be found when trying to skip sound.")
-                        }
+                    let log_message = match self
+                        .channels
+                        .items
+                        .iter()
+                        .find(|&x| x.name == name.to_string())
+                    {
+                        Some(channel) => format!("Channel {} sound skipped.", channel.name),
+                        None => "Channel could not be found when trying to skip sound.".to_string(),
                     };
                     self.items.push(log_message)
                 }
                 UIMessage::ChannelWasPlayPaused(name, is_paused) => {
-                    let log_message = match self.channels.items.iter_mut().find(|x| x.name == name.to_string()) {
+                    let log_message = match self
+                        .channels
+                        .items
+                        .iter_mut()
+                        .find(|x| x.name == name.to_string())
+                    {
                         Some(channel) => {
                             channel.paused = !channel.paused;
                             format!("Channel {} is paused: {}.", channel.name, is_paused)
                         }
                         None => {
-                            format!("Channel could not be found when trying to pause channel.")
+                            "Channel could not be found when trying to pause channel.".to_string()
                         }
                     };
                     self.items.push(log_message)
@@ -269,7 +265,7 @@ impl App {
                     color = Color::Red
                 }
                 let mut channel_label = channel.name.to_string();
-                if channel.paused == true {
+                if channel.paused {
                     channel_label.push_str("(paused)")
                 }
                 let gauge = Gauge::default()
@@ -480,7 +476,7 @@ fn main() -> Result<(), Box<dyn Error>> {
     let (ui_tx, ui_rx) = channel();
 
     // Build and spawn the Sound thread.
-    let sound_thread = std::thread::Builder::new()
+    std::thread::Builder::new()
         .name("sound_thread".to_string())
         .spawn(move || sound::run(sound_rx, ui_tx))
         .unwrap();
