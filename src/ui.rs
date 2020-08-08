@@ -5,7 +5,7 @@ use tui::{
     backend::Backend,
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
-    widgets::{Block, Borders, Gauge, List, Text},
+    widgets::{Block, Borders, Gauge, List, Paragraph, Text},
     Frame,
 };
 
@@ -39,6 +39,25 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
             .split(chunks[0]);
 
         for (i, channel) in app.channels.items.iter().enumerate() {
+            let chunks = Layout::default()
+                .constraints([Constraint::Percentage(15), Constraint::Percentage(85)].as_ref())
+                .direction(Direction::Horizontal)
+                .split(chunks[i]);
+
+            let mut threshold_label = "threshold: ".to_string();
+
+            threshold_label.push_str(match channel.threshold {
+                Threshold::Nothing => "nothing",
+                Threshold::Critical => "critical",
+                Threshold::Important => "important",
+                Threshold::Fluff => "fluff",
+                Threshold::Everything => "everything",
+            });
+            let lines = [Text::raw(threshold_label)];
+            let threshold = Paragraph::new(lines.iter())
+                .style(Style::default().fg(Color::LightGreen).bg(Color::Black));
+            f.render_widget(threshold, chunks[0]);
+
             let mut color = Color::LightGreen;
             // Hightlight selected item
             if app.channels.state.selected() == Some(i) {
@@ -48,19 +67,11 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
             if channel.paused {
                 channel_label.push_str("(paused)")
             }
-            let threshold_label = match channel.threshold {
-                Threshold::Nothing => "(threshold: nothing)",
-                Threshold::Critical => "(threshold: critical)",
-                Threshold::Important => "(threshold: important)",
-                Threshold::Fluff => "(threshold: fluff)",
-                Threshold::Everything => "(threshold: everything)",
-            };
-            channel_label.push_str(threshold_label);
             let gauge = Gauge::default()
                 .style(Style::default().fg(color).bg(Color::Black))
                 .label(&channel_label)
                 .percent(channel.volume as u16);
-            f.render_widget(gauge, chunks[i]);
+            f.render_widget(gauge, chunks[1]);
         }
     }
     {
