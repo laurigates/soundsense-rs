@@ -75,12 +75,6 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
         }
     }
     {
-        let chunks = Layout::default()
-            .direction(Direction::Horizontal)
-            .margin(0)
-            .constraints([Constraint::Percentage(100)].as_ref())
-            .split(chunks[1]);
-
         let items = app.items.iter().map(Text::raw);
         let items = List::new(items)
             .block(Block::default().borders(Borders::ALL).title("Log"))
@@ -90,6 +84,6 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
                     .fg(Color::LightGreen)
                     .modifier(Modifier::BOLD),
             );
-        f.render_widget(items, chunks[0])
+        f.render_widget(items, chunks[1])
     }
 }
