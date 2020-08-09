@@ -58,4 +58,6 @@ pub enum UIMessage {
     ChannelThresholdWasChanged(Box<str>, u8),
     /// There was an error in the Sound thread.
     SoundThreadPanicked(String, String),
+    /// New gamelog message
+    NewGamelogMessage(String, String),
 }

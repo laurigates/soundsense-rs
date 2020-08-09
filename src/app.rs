@@ -1,5 +1,6 @@
 use crate::message::{SoundMessage, Threshold, UIMessage};
 use crate::util::StatefulList;
+use crate::util::TabsState;
 use crossbeam::channel::{Receiver, Sender};
 use std::fs;
 
@@ -21,23 +22,42 @@ impl Channel {
     }
 }
 
-pub struct App {
+pub struct LogMessage {
+    pub text: String,
+    pub channel: String,
+}
+
+impl LogMessage {
+    pub fn new(text: String, channel: String) -> LogMessage {
+        LogMessage { text, channel }
+    }
+}
+
+pub struct App<'a> {
     pub should_quit: bool,
     sound_tx: Sender<SoundMessage>,
     ui_rx: Receiver<UIMessage>,
     pub channels: StatefulList<Channel>,
     pub items: Vec<String>,
+    pub gamelog: Vec<LogMessage>,
+    pub tabs: TabsState<'a>,
 }
 
-impl App {
-    pub fn new(sound_tx: Sender<SoundMessage>, ui_rx: Receiver<UIMessage>) -> App {
+impl<'a> App<'a> {
+    pub fn new(sound_tx: Sender<SoundMessage>, ui_rx: Receiver<UIMessage>) -> App<'a> {
         App {
             should_quit: false,
             sound_tx,
             ui_rx,
             channels: StatefulList::new(),
             items: Vec::new(),
+            gamelog: Vec::new(),
+            tabs: TabsState::new(vec!["Soundsense Log", "Gamelog"]),
         }
+    }
+
+    pub fn on_tab(&mut self) {
+        self.tabs.next()
     }
 
     pub fn on_up(&mut self) {
@@ -119,6 +139,9 @@ impl App {
                         ))
                         .unwrap();
                 }
+            }
+            'e' => {
+                self.tabs.next();
             }
             ' ' => {
                 // Pause selected channel
@@ -221,6 +244,9 @@ impl App {
                 UIMessage::SoundThreadPanicked(name, text) => {
                     let value = format!("Error: {} {}", &name, &text);
                     self.items.push(value)
+                }
+                UIMessage::NewGamelogMessage(message, channel) => {
+                    self.gamelog.push(LogMessage::new(message, channel))
                 }
             }
         }

@@ -531,6 +531,7 @@ impl SoundManager {
         let rng = &mut self.rng;
         let sounds = &mut self.sounds;
         let recent = &mut self.recent;
+        let mut sound_channel = "none";
 
         for (i, sound) in sounds.iter_mut().enumerate() {
             // Activate the Sound if the log matches its pattern.
@@ -670,11 +671,18 @@ impl SoundManager {
                     }
                 }
 
+                if let Some(channel_name) = &sound.channel {
+                    sound_channel = channel_name;
+                }
                 if sound.halt_on_match {
                     return Ok(());
                 }
             }
         }
+        self.ui_sender.send(UIMessage::NewGamelogMessage(
+            log.to_string(),
+            sound_channel.to_string(),
+        ))?;
         Ok(())
     }
 
