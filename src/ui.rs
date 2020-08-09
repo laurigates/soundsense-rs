@@ -6,7 +6,7 @@ use tui::{
     layout::{Constraint, Direction, Layout},
     style::{Color, Modifier, Style},
     text::{Span, Spans},
-    widgets::{Tabs, Block, Borders, Gauge, List, ListItem, Paragraph},
+    widgets::{Block, Borders, Gauge, List, ListItem, Paragraph, Tabs, Wrap},
     Frame,
 };
 
@@ -41,7 +41,7 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
 
         for (i, channel) in app.channels.items.iter().enumerate() {
             let chunks = Layout::default()
-                .constraints([Constraint::Percentage(15), Constraint::Percentage(85)].as_ref())
+                .constraints([Constraint::Length(25), Constraint::Percentage(100)].as_ref())
                 .direction(Direction::Horizontal)
                 .split(chunks[i]);
 
@@ -55,7 +55,8 @@ pub fn draw<B: Backend>(app: &App, f: &mut Frame<B>) {
                 Threshold::Everything => "everything",
             });
             let threshold = Paragraph::new(Span::from(threshold_label))
-                .style(Style::default().fg(Color::LightGreen).bg(Color::Black));
+                .style(Style::default().fg(Color::LightGreen).bg(Color::Black))
+                .wrap(Wrap { trim: true });
             f.render_widget(threshold, chunks[0]);
 
             let mut color = Color::LightGreen;
