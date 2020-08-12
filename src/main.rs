@@ -1,15 +1,13 @@
-#![cfg_attr(not(debug_assertions), windows_subsystem = "windows")]
-#![cfg_attr(debug_assertions, windows_subsystem = "console")]
+#[allow(dead_code)]
+mod util;
 
 mod app;
 mod message;
 mod sound;
 mod ui;
-mod util;
 
 use app::App;
-
-use crate::util::event::{Event, Events};
+use argh::FromArgs;
 
 #[macro_use]
 extern crate num_derive;
@@ -20,11 +18,40 @@ extern crate log;
 use crate::message::SoundMessage;
 use crossbeam::channel::unbounded as channel;
 
-use tui::{backend::TermionBackend, Terminal};
+use std::{
+    error::Error,
+    io::{stdout, Write},
+    sync::mpsc,
+    thread,
+    time::{Duration, Instant},
+};
+
+use crossterm::{
+    event::{self, DisableMouseCapture, EnableMouseCapture, Event as CEvent, KeyCode},
+    execute,
+    terminal::{disable_raw_mode, enable_raw_mode, EnterAlternateScreen, LeaveAlternateScreen},
+};
+
+enum Event<I> {
+    Input(I),
+    Tick,
+}
+
+/// Crossterm demo
+#[derive(Debug, FromArgs)]
+struct Cli {
+    /// time in ms between two ticks.
+    #[argh(option, default = "250")]
+    tick_rate: u64,
+    /// whether unicode symbols are used to improve the overall look of the app
+    #[argh(option, default = "true")]
+    enhanced_graphics: bool,
+}
+
+use tui::{backend::CrosstermBackend, Terminal};
 
 use regex::Regex;
-use std::{env, error::Error, io, path::PathBuf, sync::Mutex};
-use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::AlternateScreen};
+use std::{env, io, path::PathBuf, sync::Mutex};
 
 /// How SoundSense-RS works:
 /// 1. Dwarf Fortress(&DFHack) writes into gamelog.txt
@@ -37,6 +64,7 @@ use termion::{event::Key, input::MouseTerminal, raw::IntoRawMode, screen::Altern
 /// a Sender<UIMessage>.
 
 fn main() -> Result<(), Box<dyn Error>> {
+    let cli: Cli = argh::from_env();
     // Setup and initialize the env_logger.
     let env = env_logger::Env::default()
         .filter_or("SOUNDSENSE_RS_LOG", "warn")
@@ -251,37 +279,59 @@ fn main() -> Result<(), Box<dyn Error>> {
         println!("ignore={}", path.to_string_lossy());
     };
 
-    // Terminal initialization
-    let stdout = io::stdout().into_raw_mode()?;
-    let stdout = MouseTerminal::from(stdout);
-    let stdout = AlternateScreen::from(stdout);
-    let backend = TermionBackend::new(stdout);
+    enable_raw_mode()?;
+    let mut stdout = stdout();
+    execute!(stdout, EnterAlternateScreen, EnableMouseCapture)?;
+
+    let backend = CrosstermBackend::new(stdout);
+
     let mut terminal = Terminal::new(backend)?;
-    terminal.hide_cursor()?;
+
+    // Setup input handling
+    let (tx, rx) = mpsc::channel();
+
+    let tick_rate = Duration::from_millis(cli.tick_rate);
+
+    thread::spawn(move || {
+        let mut last_tick = Instant::now();
+        loop {
+            // poll for tick rate duration, if no events, sent tick event.
+            if event::poll(tick_rate - last_tick.elapsed()).unwrap() {
+                if let CEvent::Key(key) = event::read().unwrap() {
+                    tx.send(Event::Input(key)).unwrap();
+                }
+            }
+            if last_tick.elapsed() >= tick_rate {
+                tx.send(Event::Tick).unwrap();
+                last_tick = Instant::now();
+            }
+        }
+    });
 
     let mut app = App::new(sound_tx, ui_rx);
-    let events = Events::new();
+
+    terminal.clear()?;
 
     loop {
         terminal.draw(|mut f| ui::draw(&app, &mut f))?;
 
-        match events.next()? {
-            Event::Input(key) => match key {
-                Key::Char(c) => {
-                    app.on_key(c);
+        match rx.recv()? {
+            Event::Input(event) => match event.code {
+                KeyCode::Char('q') => {
+                    disable_raw_mode()?;
+                    execute!(
+                        terminal.backend_mut(),
+                        LeaveAlternateScreen,
+                        DisableMouseCapture
+                    )?;
+                    terminal.show_cursor()?;
+                    break;
                 }
-                Key::Up => {
-                    app.on_up();
-                }
-                Key::Down => {
-                    app.on_down();
-                }
-                Key::Left => {
-                    app.on_left();
-                }
-                Key::Right => {
-                    app.on_right();
-                }
+                KeyCode::Char(c) => app.on_key(c),
+                KeyCode::Left => app.on_left(),
+                KeyCode::Up => app.on_up(),
+                KeyCode::Right => app.on_right(),
+                KeyCode::Down => app.on_down(),
                 _ => {}
             },
             Event::Tick => {

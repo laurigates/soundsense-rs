@@ -19,26 +19,15 @@ getopts = "0.2.21"
 dirs = "3.0.1"
 log = "0.4.11"
 env_logger = "0.7.1"
-tui = "0.10.0"
-termion = "1.5.5"
+tui = { version = "0.10.0", default-features = false, features = ['crossterm'] }
+crossterm = "0.17.7"
 num-derive = "0.3.1"
 num-traits = "0.2.12"
+serde = { version = "1.0.115", "optional" = true, features = ["derive"] }
+argh = "0.1.3"
 
 [build-dependencies]
 winres = "0.1.11"
-
-[profile.dev.package.rodio]
-debug-assertions = false
-
-[profile.release]
-lto = true
-codegen-units = 1
-opt-level = "z"
-incremental = false
-panic = "abort"
-
-[profile.release.build-override]
-opt-level = 0
 
 [package.metadata.winres]
 LegalCopyright = "© 2019-2020 prixt"

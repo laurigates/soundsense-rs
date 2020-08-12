@@ -1,5 +1,4 @@
-#![allow(dead_code)]
-// #[cfg(feature = "termion")]
+#[cfg(feature = "termion")]
 pub mod event;
 
 use rand::distributions::{Distribution, Uniform};
